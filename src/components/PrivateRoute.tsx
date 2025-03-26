@@ -1,46 +1,32 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
 }
 
-export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children, requireAdmin = false }) => {
+export const PrivateRoute: React.FC<PrivateRouteProps> = ({ 
+  children, 
+  requireAdmin = false 
+}) => {
   const { user, loading } = useAuth();
-  const location = useLocation();
-  const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
-
-  React.useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            setIsAdmin(userDoc.data().role === 'admin');
-          }
-        } catch (error) {
-          console.error('Error checking admin status:', error);
-        }
-      }
-    };
-
-    checkAdminStatus();
-  }, [user]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+      </div>
+    );
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" />;
   }
 
-  if (requireAdmin && !isAdmin) {
-    return <Navigate to="/" replace />;
+  if (requireAdmin && user.role !== 'admin') {
+    return <Navigate to="/" />;
   }
 
   return <>{children}</>;

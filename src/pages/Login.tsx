@@ -1,117 +1,148 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { auth, db } from '../lib/firebase';
+import { useNavigate } from 'react-router-dom';
+import { auth } from '../lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { ArrowRight } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { User, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setLoading(true);
+
     try {
-      console.log('Attempting login with email:', email);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('Login successful, user ID:', userCredential.user.uid);
-      
-      // Check if user is admin
-      const userRef = doc(db, 'users', userCredential.user.uid);
-      console.log('Checking user document at path:', userRef.path);
-      
-      const userDoc = await getDoc(userRef);
-      console.log('User document exists:', userDoc.exists());
-      
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      // Check user role
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        console.log('User data:', userData);
-        console.log('User role:', userData.role);
-        console.log('User email:', userData.email);
-        
-        // Check if email matches admin email
-        if (userData.email === 'admin@gmail.com' || userData.role === 'admin') {
-          console.log('User is admin, redirecting to /admin');
-          navigate('/admin', { replace: true });
+        if (userData.role === 'admin') {
+          navigate('/admin');
         } else {
-          console.log('User is not admin, redirecting to /');
-          navigate('/', { replace: true });
+          navigate('/');
         }
       } else {
-        console.log('User document not found, redirecting to /');
-        navigate('/', { replace: true });
+        navigate('/');
       }
     } catch (err: any) {
-      console.error('Login error:', {
-        message: err.message,
-        code: err.code,
-        stack: err.stack
-      });
-      setError('Invalid email or password');
+      console.error('Login error:', err);
+      setError(err.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
-      <div className="w-full max-w-md p-8">
-        <h1 className="text-4xl font-bold mb-8 text-center text-gray-900 dark:text-white">
-          Welcome Back
-        </h1>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 
-                dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-              required
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl transform hover:scale-[1.02] transition-transform duration-300">
+        <div className="flex flex-col items-center">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-white shadow-lg mb-4 ring-4 ring-blue-500/20 transform hover:scale-105 transition-transform duration-300">
+            <img 
+              src="/logo.png" 
+              alt="Preshnam Solver Logo" 
+              className="w-full h-full object-cover"
             />
           </div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            Sign in to your account
+          </h2>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 
+              dark:text-red-400 rounded-lg border border-red-200 dark:border-red-800">
+              {error}
+            </div>
+          )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 
-                dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-              required
-            />
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Email</label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail className="w-5 h-5 text-blue-500 group-hover:text-blue-600 transition-colors" />
+              </div>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                className="w-full pl-10 p-3 rounded-lg border border-gray-300 dark:border-gray-600 
+                  bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                  transition-all duration-200"
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Password</label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="w-5 h-5 text-blue-500 group-hover:text-blue-600 transition-colors" />
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                className="w-full pl-10 pr-10 p-3 rounded-lg border border-gray-300 dark:border-gray-600 
+                  bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                  transition-all duration-200"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 
+                  dark:hover:text-gray-300 transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 
-              transition-colors font-medium"
+            disabled={loading}
+            className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg 
+              hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-[1.02]
+              disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
-            Sign In
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <Link
-            to="/signup"
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            Create an account
-            <ArrowRight className="w-4 h-4 ml-1" />
-          </Link>
+          <p className="text-gray-600 dark:text-gray-400">
+            Don't have an account?{' '}
+            <button
+              onClick={() => navigate('/signup')}
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 
+                dark:hover:text-blue-300 font-medium transition-colors"
+            >
+              Sign up
+            </button>
+          </p>
         </div>
       </div>
     </div>

@@ -3,11 +3,11 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
-import { SOSButton } from './components/SOSButton';
-import { ProfileIcon } from './components/ProfileIcon';
 import { Profile } from './pages/Profile';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
+import { Friends } from './pages/Friends';
+import { Home } from './pages/Home';
 import { AdminDashboard } from './pages/admin/Dashboard';
 
 function App() {
@@ -21,15 +21,17 @@ function App() {
               <Route path="/signup" element={<Signup />} />
               <Route path="/" element={
                 <PrivateRoute>
-                  <>
-                    <ProfileIcon />
-                    <SOSButton />
-                  </>
+                  <Home />
                 </PrivateRoute>
               } />
               <Route path="/profile" element={
                 <PrivateRoute>
                   <Profile />
+                </PrivateRoute>
+              } />
+              <Route path="/friends" element={
+                <PrivateRoute>
+                  <Friends />
                 </PrivateRoute>
               } />
               <Route path="/admin" element={
