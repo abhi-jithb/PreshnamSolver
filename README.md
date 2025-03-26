@@ -1,8 +1,13 @@
 # 🚨 Preshnam Solver - Emergency Alert System
 
 <div align="center">
-  <img src="/logo.png" alt="Preshnam Solver Logo" width="150" height="150" style="border-radius: 50%;" />
+  <img src="/public/logo.png" alt="Preshnam Solver Logo" width="150" height="150" style="border-radius: 50%;" />
   <p><em>Your Safety, Our Priority</em></p>
+  
+  <a href="https://www.buymeacoffee.com/abhi-jithb" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/bmc-new-btn-logo.svg" alt="Buy me a coffee" height="40" />
+  </a>
+  <p><em>If you find this project helpful, consider buying me a coffee! ☕️</em></p>
 </div>
 
 ## 🌟 Features
@@ -44,7 +49,7 @@
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/preshnam-solver.git
+git clone https://github.com/abhi-jithb/preshnam-solver.git
 cd preshnam-solver
 ```
 
@@ -120,9 +125,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 For support, email support@preshnamsolver.com or join our Slack channel.
 
+## ☕️ Buy Me a Coffee
+If you find this project helpful and would like to support its development, consider buying me a coffee! Your support helps me maintain and improve this project.
+
+<a href="https://www.buymeacoffee.com/abhijithb" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/bmc-new-btn-logo.svg" alt="Buy me a coffee" height="40" />
+</a>
+
 ---
 
 <div align="center">
   <p>Made with ❤️ for your safety</p>
-  <p>© 2024 Preshnam Solver. All rights reserved.</p>
+  <p>© 2025 Preshnam Solver. All rights reserved.</p>
 </div> 

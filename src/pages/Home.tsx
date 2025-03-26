@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, User, UserPlus, Search } from 'lucide-react';
+import { AlertTriangle, User, UserPlus, Search, Bell, Plus, X, AlertCircle, MapPin, Phone, Mail, Eye, EyeOff, Coffee, Info } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { 
   collection, 
@@ -460,21 +460,31 @@ export const Home: React.FC = () => {
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-white shadow-sm">
-                <img 
-                  src="/logo.png" 
-                  alt="Preshnam Solver Logo" 
-                  className="w-full h-full object-cover"
-                />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-white shadow-sm">
+                  <img 
+                    src="/logo.png" 
+                    alt="Preshnam Solver Logo" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Preshnam Solver
+                </h1>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Preshnam Solver
-              </h1>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/about')}
+                className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 
+                  dark:hover:text-white"
+              >
+                <Info className="w-6 h-6" />
+              </button>
               <button
                 onClick={() => navigate('/friends')}
                 className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 
