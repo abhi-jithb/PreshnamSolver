@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, User, UserPlus, Search, Bell, Plus, X, AlertCircle, MapPin, Phone, Mail, Eye, EyeOff, Coffee, Info } from 'lucide-react';
+import { AlertTriangle, User, UserPlus, Search, Bell, Plus, X, AlertCircle, MapPin, Phone, Mail, Eye, EyeOff, Coffee, Info, LogOut, Users } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { 
   collection, 
@@ -10,7 +10,9 @@ import {
   where, 
   getDocs, 
   doc, 
-  updateDoc 
+  updateDoc, 
+  getDoc, 
+  query 
 } from 'firebase/firestore';
 
 interface EmergencyAlert {
@@ -42,8 +44,12 @@ interface FriendRequest {
   id: string;
   fromUserId: string;
   toUserId: string;
+  fromUserName: string;
+  toUserName: string;
+  fromUserUsername: string;
+  toUserUsername: string;
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
-  timestamp: Date;
+  createdAt: string;
 }
 
 interface Friend {
@@ -85,6 +91,7 @@ export const Home: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
   const [alertAudio, setAlertAudio] = useState<HTMLAudioElement | null>(null);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
   // Fetch active alerts
   useEffect(() => {
@@ -112,26 +119,50 @@ export const Home: React.FC = () => {
   }, []);
 
   const fetchSentRequests = async () => {
-    try {
-      const userDoc = await getDocs(firestoreQuery(
-        collection(db, 'friendRequests'),
-        where('fromUserId', '==', auth.currentUser?.uid)
-      ));
+    if (!auth.currentUser) return;
 
-      const requests: FriendRequest[] = [];
-      userDoc.forEach((doc) => {
-        requests.push({
-          id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate() || new Date()
-        } as FriendRequest);
-      });
+    try {
+      const requestsRef = collection(db, 'friendRequests');
+      const q = query(
+        requestsRef,
+        where('fromUserId', '==', auth.currentUser.uid),
+        where('status', '==', 'pending')
+      );
+
+      const querySnapshot = await getDocs(q);
+      const requests = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toISOString() || new Date().toISOString()
+      })) as FriendRequest[];
 
       setSentRequests(requests);
     } catch (err) {
       console.error('Error fetching sent requests:', err);
     }
   };
+
+  // Fetch friend requests
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const requestsRef = collection(db, 'friendRequests');
+    const q = firestoreQuery(
+      requestsRef,
+      where('toUserId', '==', auth.currentUser.uid),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const requests = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as FriendRequest[];
+      setFriendRequests(requests);
+    });
+
+    return () => unsubscribe();
+  }, [auth.currentUser]);
 
   // Debounced search function
   const debouncedSearch = React.useCallback(
@@ -215,36 +246,65 @@ export const Home: React.FC = () => {
     debouncedSearch(query);
   };
 
-  const handleAddFriend = async (userId: string, username: string) => {
-    try {
-      // Check if request already exists
-      const existingRequest = sentRequests.find(
-        req => req.toUserId === userId && req.status === 'pending'
-      );
+  const handleAddFriend = async (userId: string) => {
+    if (!auth.currentUser) return;
 
-      if (existingRequest) {
+    try {
+      // Get current user data
+      const currentUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      if (!currentUserDoc.exists()) {
+        setError('Your profile data not found');
+        return;
+      }
+      const currentUserData = currentUserDoc.data();
+
+      // Get target user data
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (!userDoc.exists()) {
+        setError('User not found');
+        return;
+      }
+      const userData = userDoc.data();
+
+      // Check for existing request
+      const existingRequest = await getDocs(query(
+        collection(db, 'friendRequests'),
+        where('fromUserId', '==', auth.currentUser.uid),
+        where('toUserId', '==', userId),
+        where('status', '==', 'pending')
+      ));
+
+      if (!existingRequest.empty) {
         setError('Friend request already sent');
         return;
       }
 
-      // Create new friend request
+      // Create friend request
       const requestRef = await addDoc(collection(db, 'friendRequests'), {
-        fromUserId: auth.currentUser?.uid,
+        fromUserId: auth.currentUser.uid,
         toUserId: userId,
-        username: username,
+        fromUserName: currentUserData.name || currentUserData.username || 'Unknown User',
+        toUserName: userData.name || userData.username || 'Unknown User',
+        fromUserUsername: currentUserData.username || 'unknown',
+        toUserUsername: userData.username || 'unknown',
         status: 'pending',
-        timestamp: new Date()
+        createdAt: new Date().toISOString()
       });
 
       // Update local state
-      setSentRequests(prev => [...prev, {
-        id: requestRef.id,
-        fromUserId: auth.currentUser?.uid || '',
-        toUserId: userId,
-        username: username,
-        status: 'pending',
-        timestamp: new Date()
-      }]);
+      if (auth.currentUser) {
+        setSentRequests(prev => [...prev, {
+          id: requestRef.id,
+          fromUserId: auth.currentUser.uid,
+          toUserId: userId,
+          fromUserName: currentUserData.name || currentUserData.username || 'Unknown User',
+          toUserName: userData.name || userData.username || 'Unknown User',
+          fromUserUsername: currentUserData.username || 'unknown',
+          toUserUsername: userData.username || 'unknown',
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        }]);
+      }
 
       setSuccess('Friend request sent successfully');
       setTimeout(() => setSuccess(null), 3000);
@@ -279,7 +339,7 @@ export const Home: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      // Get user's friends
+      // Check if user has any friends
       const friendsRef = collection(db, 'friends');
       const friendsQuery = firestoreQuery(
         friendsRef,
@@ -292,15 +352,49 @@ export const Home: React.FC = () => {
         ...doc.data()
       })) as Friend[];
 
+      if (friends.length === 0) {
+        setError('Please add at least one friend before sending SOS');
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
+
+      // Check if user already has an active alert
+      const alertsRef = collection(db, 'alerts');
+      const activeAlertQuery = firestoreQuery(
+        alertsRef,
+        where('userId', '==', auth.currentUser.uid),
+        where('status', '==', 'active')
+      );
+      const activeAlertSnapshot = await getDocs(activeAlertQuery);
+
+      if (!activeAlertSnapshot.empty) {
+        setError('You already have an active SOS alert');
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
+
+      // Get user's data
+      const userDoc = await getDocs(firestoreQuery(
+        collection(db, 'users'),
+        where('userId', '==', auth.currentUser.uid)
+      ));
+
+      if (userDoc.empty) {
+        setError('User data not found');
+        return;
+      }
+
+      const userData = userDoc.docs[0].data();
+
       // Create alert
       const alertRef = await addDoc(collection(db, 'alerts'), {
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName,
-        userUsername: auth.currentUser.displayName?.split(' ')[0] || 'User',
+        userName: userData.name || auth.currentUser.displayName || 'Unknown User',
+        userUsername: userData.username || auth.currentUser.displayName?.split(' ')[0] || 'unknown',
         type: 'sos',
         status: 'active',
         createdAt: new Date().toISOString(),
-        location: 'Current Location',
+        location: userData.location || 'Location not available',
         friends: friends.map(friend => ({
           id: friend.friendId,
           name: friend.friendName,
@@ -399,6 +493,16 @@ export const Home: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error logging out:', err);
+      setError('Failed to logout');
+    }
+  };
+
   // Memoize the SOS button component
   const SosButton = React.memo(() => (
     <button
@@ -429,15 +533,36 @@ export const Home: React.FC = () => {
             animate-pulse">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
               <div className="flex-1">
-                <h3 className="text-2xl font-bold text-red-700 dark:text-red-300 mb-2">
-                  SOS Alert!
-                </h3>
-                <p className="text-xl font-medium text-red-600 dark:text-red-400 mb-1">
-                  From: {alert.userName}
-                </p>
-                <p className="text-lg text-red-600 dark:text-red-400">
-                  Location: {alert.location}
-                </p>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-white shadow-sm">
+                    <img 
+                      src="/logo.png" 
+                      alt="User Avatar" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-red-700 dark:text-red-300">
+                      SOS Alert!
+                    </h3>
+                    <p className="text-lg font-medium text-red-600 dark:text-red-400">
+                      From: {alert.userName}
+                    </p>
+                    <p className="text-sm text-red-500 dark:text-red-400">
+                      @{alert.userUsername}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <MapPin className="w-5 h-5" />
+                    <p>Location: {alert.location}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <Bell className="w-5 h-5" />
+                    <p>Sent at: {new Date(alert.createdAt).toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button
@@ -460,37 +585,33 @@ export const Home: React.FC = () => {
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-white shadow-sm">
-                  <img 
-                    src="/logo.png" 
-                    alt="Preshnam Solver Logo" 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Preshnam Solver
-                </h1>
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-white shadow-sm">
+                <img 
+                  src="/logo.png" 
+                  alt="Preshnam Solver Logo" 
+                  className="w-full h-full object-cover"
+                />
               </div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Preshnam Solver
+              </h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/about')}
-                className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 
-                  dark:hover:text-white"
-              >
-                <Info className="w-6 h-6" />
-              </button>
+            <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/friends')}
                 className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 
-                  dark:hover:text-white"
+                  dark:hover:text-white relative"
               >
-                <UserPlus className="w-6 h-6" />
+                <Users className="w-6 h-6" />
+                {friendRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs 
+                    rounded-full w-5 h-5 flex items-center justify-center">
+                    {friendRequests.length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => navigate('/profile')}
@@ -498,6 +619,13 @@ export const Home: React.FC = () => {
                   dark:hover:text-white"
               >
                 <User className="w-6 h-6" />
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 
+                  dark:hover:text-white"
+              >
+                <LogOut className="w-6 h-6" />
               </button>
             </div>
           </div>
@@ -508,12 +636,17 @@ export const Home: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {isLoading && !activeAlerts.length ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
-            <img 
-              src="/loading.gif" 
-              alt="Loading..." 
-              className="w-32 h-32 mb-4"
-            />
-            <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-900 rounded-full animate-spin">
+                <div className="absolute top-0 left-0 w-full h-full border-4 border-blue-500 dark:border-blue-400 rounded-full border-t-transparent animate-spin"></div>
+              </div>
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <div className="w-8 h-8 border-4 border-blue-500 dark:border-blue-400 rounded-full animate-ping"></div>
+              </div>
+            </div>
+            <p className="mt-4 text-lg font-medium text-gray-600 dark:text-gray-400 animate-pulse">
+              Loading...
+            </p>
           </div>
         ) : (
           <>
@@ -562,16 +695,18 @@ export const Home: React.FC = () => {
                               sentRequests.find(req => req.toUserId === user.id)?.id || ''
                             )}
                             className="px-3 py-1 text-sm text-red-600 hover:text-red-700 
-                              dark:text-red-400 dark:hover:text-red-300"
+                              dark:text-red-400 dark:hover:text-red-300 flex items-center gap-2"
                           >
+                            <X className="w-4 h-4" />
                             Cancel Request
                           </button>
                         ) : (
                           <button
-                            onClick={() => handleAddFriend(user.id, user.username)}
+                            onClick={() => handleAddFriend(user.id)}
                             className="px-3 py-1 text-sm text-blue-600 hover:text-blue-700 
-                              dark:text-blue-400 dark:hover:text-blue-300"
+                              dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-2"
                           >
+                            <UserPlus className="w-4 h-4" />
                             Add Friend
                           </button>
                         )}

@@ -4,6 +4,7 @@ import { auth, db } from '../lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { User, Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { addDoc, collection } from 'firebase/firestore';
 
 export const Signup: React.FC = () => {
   const navigate = useNavigate();
@@ -17,6 +18,10 @@ export const Signup: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [address, setAddress] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +58,50 @@ export const Signup: React.FC = () => {
       setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth.currentUser) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Validate phone number
+      const phoneRegex = /^[0-9]{10}$/;
+      if (!phoneRegex.test(phoneNumber)) {
+        setError('Please enter a valid 10-digit phone number');
+        return;
+      }
+
+      // Validate address
+      if (address.length < 6) {
+        setError('Address must be at least 6 characters long');
+        return;
+      }
+
+      // Create user profile
+      await addDoc(collection(db, 'users'), {
+        userId: auth.currentUser.uid,
+        name: auth.currentUser.displayName || '',
+        username: formData.username,
+        email: formData.email,
+        phoneNumber: phoneNumber,
+        address: address,
+        createdAt: new Date().toISOString()
+      });
+
+      setSuccess('Profile created successfully!');
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+    } catch (err) {
+      console.error('Error creating profile:', err);
+      setError('Failed to create profile');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -202,6 +251,77 @@ export const Signup: React.FC = () => {
             </button>
           </p>
         </div>
+
+        {/* Profile Form */}
+        <form onSubmit={handleProfileSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Username
+            </label>
+            <input
+              type="text"
+              id="username"
+              value={formData.username}
+              onChange={(e) => setFormData({...formData, username: e.target.value})}
+              required
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 
+                focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              id="phoneNumber"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              required
+              pattern="[0-9]{10}"
+              maxLength={10}
+              placeholder="Enter 10-digit phone number"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 
+                focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Address
+            </label>
+            <textarea
+              id="address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              required
+              minLength={6}
+              placeholder="Enter your address (minimum 6 characters)"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 
+                focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+              rows={3}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md 
+              shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 
+              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 
+              disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Creating Profile...' : 'Complete Profile'}
+          </button>
+        </form>
+
+        {success && (
+          <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 text-green-600 
+            dark:text-green-400 rounded-lg border border-green-200 dark:border-green-800">
+            {success}
+          </div>
+        )}
       </div>
     </div>
   );

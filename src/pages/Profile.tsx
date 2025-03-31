@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, ArrowLeft, Settings, LogOut, Send, Save, Edit2, Mail, Calendar, Phone, MapPin, X, Check } from 'lucide-react';
+import { Moon, Sun, ArrowLeft, Settings, LogOut, Send, Save, Edit2, Mail, Calendar, Phone, MapPin, X, Check, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../lib/firebase';
-import { signOut } from 'firebase/auth';
+import { signOut, updateProfile } from 'firebase/auth';
 import { collection, doc, getDoc, updateDoc, addDoc, setDoc, getDocs, query, where } from 'firebase/firestore';
 import TextareaAutosize from 'react-textarea-autosize';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface UserDetails {
   name: string;
@@ -39,6 +40,15 @@ export const Profile: React.FC = () => {
   const [newUsername, setNewUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState({
+    name: userDetails.name || '',
+    phone: userDetails.phone || '',
+    address: userDetails.address || '',
+    username: userDetails.username || ''
+  });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchUserDetails = async () => {
@@ -98,23 +108,54 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const handleSaveDetails = async () => {
-    if (!auth.currentUser) return;
-    
-    setIsSaving(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
     try {
+      // Validate phone number
+      if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
+        setError('Phone number must be exactly 10 digits');
+        return;
+      }
+
+      // Validate address
+      if (formData.address && formData.address.length < 6) {
+        setError('Address must be at least 6 characters long');
+        return;
+      }
+
+      if (!auth.currentUser) {
+        setError('User not authenticated');
+        return;
+      }
+
       const userRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userRef, {
-        ...userDetails,
+        ...formData,
         updatedAt: new Date().toISOString(),
         isProfileComplete: true
       });
+
+      // Update display name if changed
+      if (formData.name && formData.name !== auth.currentUser.displayName) {
+        await updateProfile(auth.currentUser, {
+          displayName: formData.name
+        });
+      }
+
+      setUserDetails(formData);
       setIsEditing(false);
-      setShowInitialSetup(false);
-    } catch (error) {
-      console.error('Error saving user details:', error);
+      setSuccess('Profile updated successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setError('Failed to update profile');
+      setTimeout(() => setError(null), 3000);
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -154,9 +195,38 @@ export const Profile: React.FC = () => {
     }
   };
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setFormData({ ...formData, phone: value });
+  };
+
   // Memoize the renderField function
   const renderField = React.useCallback((label: string, value: string, type: string = 'text') => {
     if (isEditing || showInitialSetup) {
+      if (label.toLowerCase() === 'address') {
+        return (
+          <textarea
+            value={value}
+            onChange={(e) => setUserDetails({...userDetails, [label.toLowerCase()]: e.target.value})}
+            className="w-full p-2 rounded border dark:bg-gray-700 dark:border-gray-600
+              focus:ring-2 focus:ring-blue-500 min-h-[100px] resize-y"
+            placeholder={`Enter your ${label.toLowerCase()}`}
+          />
+        );
+      }
+      if (label.toLowerCase() === 'phone') {
+        return (
+          <input
+            type="tel"
+            value={value}
+            onChange={handlePhoneChange}
+            className="w-full p-2 rounded border dark:bg-gray-700 dark:border-gray-600
+              focus:ring-2 focus:ring-blue-500"
+            placeholder={`Enter your ${label.toLowerCase()}`}
+            maxLength={10}
+          />
+        );
+      }
       return (
         <input
           type={type}
@@ -207,11 +277,11 @@ export const Profile: React.FC = () => {
         </div>
         <div className="mt-6 flex justify-end">
           <button
-            onClick={handleSaveDetails}
+            onClick={handleSubmit}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            disabled={isSaving}
+            disabled={isSubmitting}
           >
-            {isSaving ? 'Saving...' : 'Save & Continue'}
+            {isSubmitting ? 'Saving...' : 'Save & Continue'}
           </button>
         </div>
       </div>
@@ -238,15 +308,15 @@ export const Profile: React.FC = () => {
           <p className="text-blue-100 mt-1">{userDetails.email}</p>
         </div>
         <button
-          onClick={() => isEditing ? handleSaveDetails() : setIsEditing(true)}
+          onClick={() => isEditing ? handleSubmit() : setIsEditing(true)}
           className="inline-flex items-center justify-center space-x-2 bg-white text-blue-600 px-4 py-2 
             rounded-lg hover:bg-blue-50 transition-colors w-full md:w-auto"
-          disabled={isSaving}
+          disabled={isSubmitting}
         >
           {isEditing ? (
             <>
               <Save className="w-5 h-5 mr-2" />
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </>
           ) : (
             <>
@@ -293,20 +363,167 @@ export const Profile: React.FC = () => {
 
         {/* Profile Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-gray-50 dark:bg-gray-800 p-4 md:p-6 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <Mail className="w-5 h-5 mr-2" />
-              Contact Information
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone Number</label>
-                {renderField('phone', userDetails.phone, 'tel')}
-              </div>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {isEditing ? (
+              <motion.div
+                key="edit-form"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg"
+              >
+                <motion.form
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  onSubmit={handleSubmit}
+                  className="space-y-6"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Full Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                            bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                            transition-all duration-200"
+                          placeholder="Enter your full name"
+                        />
+                      </div>
 
-          <div className="bg-gray-50 dark:bg-gray-800 p-4 md:p-6 rounded-lg">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Phone Number
+                        </label>
+                        <input
+                          type="tel"
+                          value={formData.phone}
+                          onChange={handlePhoneChange}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                            bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                            transition-all duration-200"
+                          placeholder="Enter your phone number"
+                          maxLength={10}
+                        />
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Username
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.username}
+                          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                            bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                            transition-all duration-200"
+                          placeholder="Choose a username"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Address
+                        </label>
+                        <textarea
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                            bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                            transition-all duration-200 min-h-[100px] resize-y"
+                          placeholder="Enter your address"
+                        />
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex justify-end space-x-4"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                      className="px-6 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                        text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700
+                        transition-all duration-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700
+                        disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
+                        flex items-center space-x-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          >
+                            <Loader2 className="w-5 h-5" />
+                          </motion.div>
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-5 h-5" />
+                          <span>Save Changes</span>
+                        </>
+                      )}
+                    </button>
+                  </motion.div>
+                </motion.form>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="view-profile"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-gray-50 dark:bg-gray-800 p-4 md:p-6 rounded-lg"
+              >
+                <h2 className="text-xl font-semibold mb-4 flex items-center">
+                  <Mail className="w-5 h-5 mr-2" />
+                  Contact Information
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Phone Number</label>
+                    {renderField('phone', userDetails.phone, 'tel')}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-gray-50 dark:bg-gray-800 p-4 md:p-6 rounded-lg"
+          >
             <h2 className="text-xl font-semibold mb-4 flex items-center">
               <MapPin className="w-5 h-5 mr-2" />
               Location
@@ -315,7 +532,7 @@ export const Profile: React.FC = () => {
               <label className="block text-sm font-medium mb-1">Address</label>
               {renderField('address', userDetails.address)}
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Account Information */}
